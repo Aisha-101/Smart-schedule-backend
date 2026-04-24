@@ -14,7 +14,7 @@ class AppointmentController extends Controller
     {
         $request->validate([
             'client_id' => 'required|exists:users,id',
-            'specialist_id' => 'required|exists:specialists,id',
+            'specialist_id' => 'required|exists:users,id',
             'services' => 'required|array',
             'services.*' => 'exists:services,id',
             'start_time' => 'required|date',
@@ -77,5 +77,29 @@ class AppointmentController extends Controller
             ['status' => 'CANCELED']
         );
         return response()->json(['message' => 'Appointment canceled successfully']);
+    }
+    public function my()
+    {
+        $user = auth()->user();
+
+        if($user->role === 'CLIENT'){
+            return Appointment::with([
+                'services',
+                'specialist'
+            ])
+            ->where('client_id', $user->id)
+            ->get();
+        }
+
+        if($user->role === 'SPECIALIST'){
+            return Appointment::with([
+                'services',
+                'client'
+            ])
+            ->where('specialist_id', $user->id)
+            ->get();
+        }
+
+        return response()->json([]);
     }
 }
