@@ -12,16 +12,17 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register',[AuthController::class,'register']);
 Route::post('/login',[AuthController::class,'login']);
 Route::get('/services',[ServiceController::class,'index']);
+Route::get('/specialists',[SpecialistController::class,'index']);
 
 // PROTECTED
 Route::middleware('auth:api')->group(function(){
 
+Route::get('/appointments/my',[AppointmentController::class,'my']);
 Route::get('/appointments',[AppointmentController::class,'index']);
 Route::post('/appointments',[AppointmentController::class,'store']);
 Route::put('/appointments/{id}',[AppointmentController::class,'update']);
 Route::delete('/appointments/{id}',[AppointmentController::class,'destroy']);
 
-Route::get('/appointments/my',[AppointmentController::class,'my']);
 
 Route::get('/specialists/{id}/schedule',[SpecialistAvailabilityController::class,'index']);
 

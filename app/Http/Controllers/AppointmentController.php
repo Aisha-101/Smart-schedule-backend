@@ -13,13 +13,14 @@ class AppointmentController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'client_id' => 'required|exists:users,id',
             'specialist_id' => 'required|exists:users,id',
             'services' => 'required|array',
             'services.*' => 'exists:services,id',
             'start_time' => 'required|date',
             'end_time' => 'required|date|after:start_time'
         ]);
+
+        $clientId = auth()->id();
 
        $overlap = Appointment::where('specialist_id', $request->specialist_id)
             ->where('status', '!=', 'canceled')
@@ -40,7 +41,7 @@ class AppointmentController extends Controller
         }
 
         $appointment = Appointment::create([
-            'client_id' => $request->client_id,
+            'client_id' => $client_id,
             'specialist_id' => $request->specialist_id,
             'start_time' => $request->start_time,
             'end_time' => $request->end_time,
