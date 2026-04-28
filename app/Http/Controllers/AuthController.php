@@ -29,13 +29,37 @@ class AuthController extends Controller
     {
        $credentials = $request->only ('email', 'password');
 
-       if(!$token = auth()->attempt($credentials)){
+       if(!$token = auth('api')->attempt($credentials)){
            return response()->json(['error'=>'Invalid credentials'], 401);
        }
 
        return response()->json([
            'token'=>$token,
-           'user'=>auth()->user()
+           'user'=>auth('api')->user()
        ]);
+    }
+    public function forgotPassword(Request $request)
+    {
+        $request->validate([
+            'email'=>'required|email|exists:users,email'
+        ]);
+
+        return response()->json([
+            'message'=>'Password reset link sent to your email'
+        ]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'token'=>'required',
+            'email'=>'required|email|exists:users,email',
+            'password'=>'required|min:6|confirmed',
+            'password_confirmation'=>'required'
+        ]);
+
+        return response()->json([
+            'message'=>'Password reset successfully'
+        ]);
     }
 }

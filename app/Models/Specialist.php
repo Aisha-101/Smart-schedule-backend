@@ -25,4 +25,9 @@ class Specialist extends Model
     {
         return $this->hasMany(SpecialistAvailability::class);
     }
+
+    public function services()
+    {
+        return $this->hasMany(Service::class);
+    }
 }

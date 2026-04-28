@@ -22,4 +22,13 @@ class SpecialistController extends Controller
 
         return Specialist::create($request->all());
     }
+
+    public function services($id)
+    {
+        $specialist = Specialist::with('services')
+            ->findOrFail($id);
+
+        return $specialist->services;
+    }
+    
 }
