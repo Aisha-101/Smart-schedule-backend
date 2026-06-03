@@ -87,9 +87,8 @@ Route::middleware(['auth:api','role:ADMIN'])->group(function(){
     Route::get('/statistics', [StatisticsController::class, 'index']);
 
     Route::get('/admin/users', [AdminUserController::class, 'index']);
-    Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::get('/admin/users/{id}', [AdminUserController::class, 'show']);
-    Route::put('/admin/users/{id}', [AdminUserController::class, 'update']);
+    Route::patch('/admin/users/{id}/role', [AdminUserController::class, 'updateRole']);
     Route::delete('/admin/users/{id}', [AdminUserController::class, 'destroy']);
 });
 
@@ -102,8 +101,8 @@ Route::middleware(['auth:api','role:SPECIALIST'])->group(function(){
         
     Route::get('/specialists/{id}/schedule', [SpecialistAvailabilityController::class, 'index']);
     Route::post('/specialists/{id}/schedule', [SpecialistAvailabilityController::class, 'store']);
-    Route::put('/specialists/{id}/schedule/{scheduleId}', [SpecialistAvailabilityController::class, 'update']);
-    Route::delete('/specialists/{id}/schedule/{scheduleId}', [SpecialistAvailabilityController::class, 'destroy']);
+    Route::put('/availability/{id}', [SpecialistAvailabilityController::class, 'update']);
+    Route::delete('/availability/{id}', [SpecialistAvailabilityController::class, 'destroy']);
 });
 
 Route::middleware(['auth:api','role:CLIENT'])->group(function(){

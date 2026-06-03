@@ -83,11 +83,19 @@ class StatisticsController extends Controller
             $busyHoursQuery->whereDate('start_time', '<=', $to);
         }
 
-        $busyHours = $busyHoursQuery
-            ->groupBy(DB::raw('HOUR(start_time)'))
-            ->orderByDesc('count')
-            ->get();
+        $driver = DB::connection()->getDriverName();
 
+        if ($driver === 'sqlite') {
+            $busyHours = Appointment::selectRaw("strftime('%H', start_time) as hour, COUNT(*) as count")
+                ->groupByRaw("strftime('%H', start_time)")
+                ->orderByDesc('count')
+                ->get();
+        } else {
+            $busyHours = Appointment::selectRaw('HOUR(start_time) as hour, COUNT(*) as count')
+                ->groupByRaw('HOUR(start_time)')
+                ->orderByDesc('count')
+                ->get();
+        }
         return response()->json([
             'filters' => [
                 'from' => $from,

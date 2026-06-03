@@ -12,7 +12,9 @@ class Appointment extends Model
         'start_time',
         'end_time',
         'status',
-        'delay_minutes'
+        'delay_minutes',
+        'confirmation_email_sent_at',
+        'cancellation_reason',
     ];
     public function client()
     {

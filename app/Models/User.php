@@ -24,7 +24,9 @@ class User extends Authenticatable implements JWTSubject, MustVerifyEmail
         'name',
         'email',
         'password',
-        'role'
+        'role',
+        'email_verified_at',
+        'is_deleted',
     ];
 
     /**
@@ -70,5 +72,10 @@ class User extends Authenticatable implements JWTSubject, MustVerifyEmail
     public function specialistAppointments()
     {
         return $this->hasMany(Appointment::class, 'specialist_id');
+    }
+
+    public function appointmentsAsClient()
+    {
+        return $this->hasMany(Appointment::class, 'client_id');
     }
 }

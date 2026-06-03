@@ -68,7 +68,7 @@ class AppointmentController extends Controller
         $request->validate([
             'start_time' => 'sometimes|required|date',
             'end_time' => 'sometimes|required|date|after:start_time',
-            'status' => 'sometimes|required|in:SCHEDULED, CONFIRMED, COMPLETED,CANCELED,NO_SHOW,LATE',
+            'status' => 'sometimes|required|in:SCHEDULED,CONFIRMED,COMPLETED,CANCELED,NO_SHOW,LATE',
             'services' => 'sometimes|array',
             'services.*' => 'exists:services,id'
         ]);
@@ -141,10 +141,39 @@ class AppointmentController extends Controller
     {
         $appointment = Appointment::findOrFail($id);
 
-        $appointment->update(
-            ['status' => 'CANCELED']
-        );
-        return response()->json(['message' => 'Appointment canceled successfully']);
+        $user = auth()->user();
+
+        if ($user->role !== 'CLIENT' || (int) $appointment->client_id !== (int) $user->id) {
+            return response()->json([
+                'message' => 'You can only cancel your own appointments.'
+            ], 403);
+        }
+
+        if (! in_array($appointment->status, ['SCHEDULED', 'CONFIRMED'])) {
+            return response()->json([
+                'message' => 'Only scheduled or confirmed appointments can be canceled.'
+            ], 422);
+        }
+
+        $appointmentStart = Carbon::parse($appointment->start_time);
+
+        if ($appointment->status === 'CONFIRMED') {
+        $appointmentStart = Carbon::parse($appointment->start_time);
+
+        if (now()->diffInHours($appointmentStart, false) < 24) {
+                return response()->json([
+                    'message' => 'Confirmed appointments can only be canceled at least 24 hours before the start time.'
+                ], 422);
+            }
+        }
+
+        $appointment->update([
+            'status' => 'CANCELED'
+        ]);
+
+        return response()->json([
+            'message' => 'Appointment canceled successfully'
+        ]);
     }
     public function my()
     {
@@ -195,6 +224,7 @@ class AppointmentController extends Controller
         $request->validate([
             'status' => 'required|in:SCHEDULED,CONFIRMED,COMPLETED,CANCELED,NO_SHOW,LATE',
             'delay_minutes' => 'nullable|integer|min:0',
+            'cancellation_reason' => 'nullable|string|max:1000',
         ]);
 
         $user = auth()->user();
@@ -206,6 +236,24 @@ class AppointmentController extends Controller
             return response()->json([
                 'message' => 'You can only update your own appointments.'
             ], 403);
+        }
+
+        if ($request->status === 'CANCELED') {
+            if (! in_array($appointment->status, ['SCHEDULED', 'CONFIRMED'])) {
+                return response()->json([
+                    'message' => 'Only scheduled or confirmed appointments can be canceled.'
+                ], 422);
+            }
+
+            if ($appointment->status === 'CONFIRMED') {
+                $appointmentStart = Carbon::parse($appointment->start_time);
+
+                if (now()->diffInHours($appointmentStart, false) < 24) {
+                    return response()->json([
+                        'message' => 'Confirmed appointments can only be canceled at least 24 hours before the start time.'
+                    ], 422);
+                }
+            }
         }
 
         $delayMinutes = 0;
@@ -222,12 +270,22 @@ class AppointmentController extends Controller
         $appointment->update([
             'status' => $request->status,
             'delay_minutes' => $delayMinutes,
+            'cancellation_reason' => $request->status === 'CANCELED'
+                ? $request->cancellation_reason
+                : $appointment->cancellation_reason,
         ]);
 
+        $appointment->refresh();
+
         if ($request->status === 'CANCELED' && $appointment->client?->email) {
+            $reason = $appointment->cancellation_reason
+                ? "\nReason: {$appointment->cancellation_reason}\n"
+                : "\nReason was not provided.\n";
+
             Mail::raw(
                 "Hello {$appointment->client->name},\n\n" .
-                "Your appointment on {$appointment->start_time} has been canceled by the specialist.\n\n" .
+                "Your appointment on {$appointment->start_time} has been canceled by the specialist.\n" .
+                $reason . "\n" .
                 "Please log in to SmartSchedule to book another appointment.\n\n" .
                 "SmartSchedule",
                 function ($message) use ($appointment) {
@@ -278,9 +336,13 @@ class AppointmentController extends Controller
     public function sendConfirmationEmail($id)
     {
         $appointment = Appointment::with('client')->findOrFail($id);
+
         $user = auth()->user();
 
-        if ($user->role !== 'CLIENT' || (int) $appointment->client_id !== (int) $user->id) {
+        if (
+            $user->role !== 'CLIENT' ||
+            (int) $appointment->client_id !== (int) $user->id
+        ) {
             return response()->json([
                 'message' => 'You can request confirmation only for your own appointments',
             ], 403);
@@ -292,10 +354,23 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        $hash = sha1($appointment->id.'|'.$appointment->client->email.'|'.$appointment->start_time);
-        $url = url('/api/appointments/'.$appointment->id.'/confirm-email/'.$hash);
+        $hash = sha1(
+            $appointment->id . '|' .
+            $appointment->client->email . '|' .
+            $appointment->start_time
+        );
 
-        $appointment->client->notify(new AppointmentConfirmationNotification($appointment, $url));
+        $frontendUrl = rtrim(config('app.url'), '/');
+
+        $url = $frontendUrl .
+            '/confirm-appointment?id=' .
+            $appointment->id .
+            '&hash=' .
+            $hash;
+
+        $appointment->client->notify(
+            new AppointmentConfirmationNotification($appointment, $url)
+        );
 
         return response()->json([
             'message' => 'Confirmation email sent successfully',
@@ -305,22 +380,48 @@ class AppointmentController extends Controller
     public function confirmByEmail($id, $hash)
     {
         $appointment = Appointment::with('client')->findOrFail($id);
-        $expectedHash = sha1($appointment->id.'|'.$appointment->client->email.'|'.$appointment->start_time);
-        $frontendUrl = rtrim(config('app.frontend_url'), '/');
+
+        $expectedHash = sha1(
+            $appointment->id . '|' .
+            $appointment->client->email . '|' .
+            $appointment->start_time
+        );
 
         if (! hash_equals($expectedHash, $hash)) {
-            return redirect()->away($frontendUrl.'/my-appointments?confirm=error&reason=invalid_link');
+            return response()->json([
+                'message' => 'Invalid confirmation link.'
+            ], 422);
+        }
+
+        if ($appointment->status === 'CONFIRMED') {
+            return response()->json([
+                'message' => 'Appointment is already confirmed.',
+                'appointment' => $appointment,
+            ]);
+        }
+
+        if ($appointment->status !== 'SCHEDULED') {
+            return response()->json([
+                'message' => 'Only scheduled appointments can be confirmed.'
+            ], 422);
         }
 
         $now = Carbon::now();
         $appointmentStart = Carbon::parse($appointment->start_time);
 
         if (! $now->isSameDay($appointmentStart->copy()->subDay())) {
-            return redirect()->away($frontendUrl.'/my-appointments?confirm=error&reason=wrong_day');
+            return response()->json([
+                'message' => 'Appointment can only be confirmed one day before the reservation.'
+            ], 422);
         }
 
-        $appointment->update(['status' => 'CONFIRMED']);
+        $appointment->update([
+            'status' => 'CONFIRMED',
+        ]);
 
-        return redirect()->away($frontendUrl.'/my-appointments?confirm=success&appointment_id='.$appointment->id);
+        return response()->json([
+            'message' => 'Appointment confirmed successfully.',
+            'appointment' => $appointment,
+        ]);
     }
 }

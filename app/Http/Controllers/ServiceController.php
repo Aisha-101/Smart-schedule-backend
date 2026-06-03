@@ -11,7 +11,8 @@ class ServiceController extends Controller
 {
     public function index()
     {
-        return Service::all();
+        return Service::with('specialist:id,name,email,role')
+            ->get();
     }
 
     public function store(Request $request)

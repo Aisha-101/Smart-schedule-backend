@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 class SpecialistAvailability extends Model
@@ -13,4 +14,8 @@ class SpecialistAvailability extends Model
         'start_time',
         'end_time'
     ];
+    public function specialist()
+    {
+        return $this->belongsTo(User::class, 'specialist_id');
+    }
 }

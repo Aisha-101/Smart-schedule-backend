@@ -6,6 +6,7 @@ use App\Models\Appointment;
 use App\Models\Service;
 use App\Models\Specialist;
 use App\Models\SpecialistAvailability;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class RecommendationService
@@ -172,15 +173,22 @@ class RecommendationService
 
     private function specialistCancellationRisk($specialistId, $slot)
     {
-        $hour = Carbon::parse($slot)->hour;
+        $hour = Carbon::parse($slot)->format('H');
+        $driver = DB::connection()->getDriverName();
+
+        if ($driver === 'sqlite') {
+            $hourExpression = "strftime('%H', start_time)";
+        } else {
+            $hourExpression = "LPAD(HOUR(start_time), 2, '0')";
+        }
 
         $cancelledAtHour = Appointment::where('specialist_id', $specialistId)
             ->where('status', 'CANCELED')
-            ->whereRaw('HOUR(start_time) = ?', [$hour])
+            ->whereRaw("$hourExpression = ?", [$hour])
             ->count();
 
         $totalAtHour = Appointment::where('specialist_id', $specialistId)
-            ->whereRaw('HOUR(start_time) = ?', [$hour])
+            ->whereRaw("$hourExpression = ?", [$hour])
             ->count();
 
         if ($totalAtHour === 0) {
